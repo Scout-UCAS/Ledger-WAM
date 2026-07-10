@@ -40,7 +40,7 @@ Ledger-WAM 是 opt-in 设计。默认 LingBot-VA 配置仍保持原行为；只�
 
 ```text
 .
-├── README.md                         # 上游 LingBot-VA 说明，保留原信息
+├── README.md                         # Ledger-WAM 项目主页
 ├── README_CN.md                      # 本文件，项目中文详细说明
 ├── LEDGER_WAM.md                     # Ledger-WAM 数据契约、训练与在线协议细节
 ├── INSTALL.md                        # 安装补充说明
@@ -109,8 +109,7 @@ pip install .[train]
 
 ## 模型与数据
 
-LingBot-VA checkpoint 和数据集可参考原始 `README.md` 中的 HuggingFace /
-ModelScope 链接。常用数据包括：
+LingBot-VA checkpoint 和数据集可从 HuggingFace / ModelScope 获取。常用数据包括：
 
 - `robbyant/lingbot-va-base`
 - `robbyant/lingbot-va-posttrain-robotwin`
@@ -536,4 +535,4 @@ runner，因此不能把论文实验的 VLABench 部分视为已经一键复现�
 ## License 与引用
 
 本项目保留 LingBot-VA 原 Apache-2.0 License。引用 LingBot-VA 或 Ledger-WAM
-相关工作时，请同时参考原始 `README.md` 和论文说明。
+相关工作时，请同时参考 LingBot-VA 原论文、Ledger-WAM 论文说明和本仓库文档。

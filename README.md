@@ -1,588 +1,479 @@
-<h1 align="center">LingBot-VA: Causal World Modeling for Robot Control</h1>
+# Ledger-WAM: Causal Ledger World-Action Model
 
-> This workspace also contains an opt-in implementation of **Ledger-WAM** for
-> causal-belief tracking, causal debt, self-healing repair selection, and local
-> logical rollback. See [LEDGER_WAM.md](LEDGER_WAM.md) for the data schema,
-> training configurations, server contract, and limitations.
->
-> 中文详细项目说明见 [README_CN.md](README_CN.md)。
+Ledger-WAM is a Ledger-augmented world-action model for embodied robot control.
+This repository is built on top of LingBot-VA and extends it with structured
+causal-belief tracking, causal debt estimation, counterfactual action modeling,
+self-healing repair selection, and local logical rollback.
 
-<p align="center">
-  <a href="https://arxiv.org/abs/2601.21998"><img src="https://img.shields.io/static/v1?label=Paper&message=PDF&color=red&logo=arxiv"></a>
-  <a href="https://technology.robbyant.com/lingbot-va"><img src="https://img.shields.io/badge/Project-Website-blue"></a>
-  <a href="https://huggingface.co/collections/robbyant/lingbot-va"><img src="https://img.shields.io/static/v1?label=%F0%9F%A4%97%20Model&message=HuggingFace&color=orange"></a>
-  <a href="https://modelscope.cn/collections/Robbyant/LingBot-VA"><img src="https://img.shields.io/static/v1?label=%F0%9F%A4%96%20Model&message=ModelScope&color=purple"></a>
-  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-Apache--2.0-green"></a>
-</p>
+The implementation is opt-in. Legacy LingBot-VA configurations keep their
+original behavior, while Ledger-WAM paths are enabled through `ledger_enabled`
+or the `ledger_*` training/server configurations.
 
-<p align="center">
-  <img src="assets/teaser_v3.png" width="100%">
-</p>
+## Highlights
 
+- Structured causal ledger over observed video latents, action history, and
+  language embeddings.
+- Claim slots with truth, presence, relation, entity, precondition, effect,
+  evidence, uncertainty, dependency, repair cost, observability, importance,
+  debt, rollback, and repair-action predictions.
+- Monotone causal debt: lower confidence, higher uncertainty, stronger
+  dependency, higher repair cost, and lower observability increase risk by
+  construction.
+- Directed dependency graph and local logical rollback. Physical robot state is
+  never rolled back; only the logical plan and invalidated beliefs are updated.
+- Counterfactual action supervision with a shared Siamese transition head.
+- Self-healing planner that decides between normal task execution, repair
+  actions, and local rollback.
+- Online repair execution handshake. A repair is not treated as executed until
+  the controller returns `repair_execution_ack`.
+- RoboTwin and LIBERO clients, Ledger sidecar schema, unit tests, metrics, and
+  detailed Chinese documentation.
 
+## Current Status
 
-https://github.com/user-attachments/assets/cec7b7a6-953b-4fa4-8f1a-47efc1fce547
+Implemented:
 
+- Ledger neural head and training losses.
+- Ledger sidecar schema for JSON/JSONL causal annotations.
+- Runtime causal ledger, evidence fusion, dependency invalidation, repair
+  selection, and logical rollback.
+- Repair-action issue/ack protocol.
+- Ledger-conditioned action-token adapter.
+- RoboTwin and LIBERO evaluation clients.
+- Metrics for root-cause localization, debt calibration, rollback, repair
+  efficiency, and local rollback ratio.
+- Example ledger annotations and unit tests.
 
+Known scope limits:
 
+- VLABench is not yet a one-command benchmark in this repository. It requires a
+  dedicated `evaluation/vlabench` adapter that maps VLABench observations and
+  actions to the Ledger-WAM server protocol.
+- Paper-level reproduction requires real causal labels, trained Ledger
+  checkpoints, benchmark simulators, and robot-specific repair executors.
+- Lightweight tests pass locally, but full CUDA/GPU training and simulator
+  evaluation must be run in the target environment.
 
-## Table of Contents
+## Repository Layout
 
-- [News](#-news)
-- [Model Download](#-model-download)
-- [Quick Start](#️-quick-start)
-  - [Installation](#installation)
-  - [attn_mode Configuration](#️-important-attn_mode-configuration)
-  - [Deploying LingBot-VA for Inference](#deploying-lingbot-va-for-inference)
-    - [Evaluation on RoboTwin-2.0](#evaluation-on-robotwin-20)
-    - [Evaluation on LIBERO](#evaluation-on-libero)
-    - [Run Image to Video-Action Generation](#run-image-to-video-action-generation)
-  - [Post-Training LingBot-VA](#post-training-lingbot-va)
-    - [Data Preparation](#data-preparation)
-    - [Custom Dataset Preparation](#custom-dataset-preparation)
-    - [Training](#training)
-- [Performance](#-performance)
-  - [Simulation Evaluation](#simulation-evaluation)
-  - [Real-world Deployment](#real-world-deployment)
-- [License](#-license)
-- [Citation](#citation)
-- [Acknowledgments](#-acknowledgments)
+```text
+.
+├── README.md                         # Project entry point
+├── README_CN.md                      # Detailed Chinese documentation
+├── LEDGER_WAM.md                     # Ledger-WAM schema and runtime protocol
+├── INSTALL.md                        # Installation notes
+├── requirements.txt
+├── pyproject.toml
+├── example/
+│   ├── ledger_annotations.example.jsonl
+│   ├── robotwin/
+│   ├── libero/
+│   ├── franka/
+│   └── demo/
+├── evaluation/
+│   ├── libero/
+│   └── robotwin/
+├── script/
+│   ├── run_va_posttrain.sh
+│   └── run_launch_va_server_sync.sh
+├── tests/
+└── wan_va/
+    ├── configs/
+    ├── dataset/
+    ├── ledger/
+    ├── modules/
+    ├── train.py
+    └── wan_va_server.py
+```
 
----
+## Requirements
 
-## 💫 Meet **LingBot-VA**!  We've built an AR diffusion framework for simultaneous world modeling and action! 🤖✨
+Recommended environment:
 
-**LingBot-VA** has focused on:
-- **Autoregressive Video-Action World Modeling**: Architecturally unifies visual dynamics prediction and action inference within a single interleaved sequence while maintaining their conceptual distinction.
-- **High-efficiency Execution**: A dual-stream mixture-of-transformers(MoT) architecture with Asynchronous Execution and KV Cache.
-- **Long-Horizon Performance and Generalization**: High improvements in sample efficiency, long-horizon success rates, and generalization to novel scenes.
+```text
+Python >= 3.10, < 4.0
+CUDA 12.6
+PyTorch 2.9.0
+torchvision 0.24.0
+torchaudio 2.9.0
+diffusers 0.36.0
+transformers 4.55.2
+lerobot 0.3.3
+```
 
-# 🚀 News
-- **[2026-04-24]** Weights for post-train on **LIBERO-LONG** released! (**IMPORTANT**: Ensure that `va_libero_cfg.action_snr_shift`, `va_libero_cfg.used_action_channel_ids` and `va_libero_cfg.norm_stat` in [`wan_va/configs/va_libero_cfg.py`](wan_va/configs/va_libero_cfg.py) are synchronized with the latest version of the repository.)
-- **[2026-04-08]** Post-training and inference code for the **LIBERO** dataset is now available!
-- **[2026-02-17]** Post-training code and dataset released! Support fine-tuning LingBot-VA on custom robotic manipulation datasets.
-- **[2026-01-29]** Weights and code for shared backbone released! Please stay tuned for our separated version!
-
-
-
-
----
-
-
-
-# 📦 Model Download
-- **Pretrained Checkpoints for Post-Training**
-
-| Model Name | Huggingface Repository | ModelScope Repository  | Description |
-| :--- | :--- | :--- | :--- |
-| lingbot-va-base &nbsp; | [🤗 robbyant/lingbot-va-base &nbsp;](https://huggingface.co/robbyant/lingbot-va-base) | [🤖 Robbyant/lingbot-va-base &nbsp;](https://modelscope.cn/models/Robbyant/lingbot-va-base)  | LingBot-VA w/ shared backbone|
-| lingbot-va-posttrain-robotwin &nbsp; | [🤗 robbyant/lingbot-va-posttrain-robotwin &nbsp;](https://huggingface.co/robbyant/lingbot-va-posttrain-robotwin) | [🤖 Robbyant/lingbot-va-posttrain-robotwin &nbsp;](https://modelscope.cn/models/Robbyant/lingbot-va-posttrain-robotwin)  | LingBot-VA-Posttrain-Robotwin w/ shared backbone|
-| lingbot-va-posttrain-libero-long &nbsp; | [🤗 robbyant/lingbot-va-posttrain-libero-long &nbsp;](https://huggingface.co/robbyant/lingbot-va-posttrain-libero-long) | [🤖 Robbyant/lingbot-va-posttrain-libero-long &nbsp;](https://modelscope.cn/models/Robbyant/lingbot-va-posttrain-libero-long)  | LingBot-VA-Posttrain-LIBERO-LONG w/ shared backbone|
-
-- **Post-Training Dataset**
-
-| Dataset Name | Huggingface Repository | ModelScope Repository | Description |
-| :--- | :--- | :--- | :--- |
-| robotwin-clean-and-aug-lerobot &nbsp; | [🤗 robbyant/robotwin-clean-and-aug-lerobot](https://huggingface.co/datasets/robbyant/robotwin-clean-and-aug-lerobot) | [🤖 Robbyant/robotwin-clean-and-aug-lerobot](https://modelscope.cn/datasets/Robbyant/robotwin-clean-and-aug-lerobot) | Cleaned & augmented RoboTwin dataset in LeRobot format for post-training |
-| libero-long-lerobot &nbsp; | [🤗 robbyant/libero-long-lerobot](https://huggingface.co/datasets/robbyant/libero-long-lerobot) | [🤖 Robbyant/libero-long-lerobot](https://modelscope.cn/datasets/Robbyant/libero-long-lerobot) | LIBERO-Long dataset in LeRobot format for post-training |
----
-
-# 🛠️ Quick Start
-
-## Installation
-**Requirements**
- • Python == 3.10.16
- • Pytorch == 2.9.0
- • CUDA 12.6
+Install:
 
 ```bash
-pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu126
-pip install websockets einops diffusers==0.36.0 transformers==4.55.2 accelerate msgpack opencv-python matplotlib ftfy easydict
+pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 \
+  --index-url https://download.pytorch.org/whl/cu126
+
+pip install -r requirements.txt
 pip install flash-attn --no-build-isolation
 ```
 
+Package install:
 
-## ⚠️ Important: `attn_mode` Configuration
+```bash
+pip install .
+pip install .[train]
+```
 
-> **You MUST change the `attn_mode` setting depending on whether you are training or running inference.**
-> Since LingBot-VA is loaded via `from_pretrained`, this parameter is read from the model folder's **`transformer/config.json`**.
-> You need to **manually edit** this file before launching.
->
-> | Mode | `attn_mode` value | Notes |
-> |---|---|---|
-> | **Training** | `"flex"` | Required for training. **Will not work** for inference. |
-> | **Inference / Evaluation** | `"torch"` or `"flashattn"` | Required for inference. `"flex"` will cause errors at eval time. |
->
-> **How to change:** Open `<your-model-path>/transformer/config.json`, find the `"attn_mode"` field, and set it to the appropriate value.
+## Model and Data
 
----
+This project reuses LingBot-VA checkpoints and LeRobot-format post-training
+datasets. Useful upstream resources include:
 
-## Deploying LingBot-VA for Inference
-LingBot-VA supports both standalone execution and Server-Client architecture which separates the model environment from simulation. By isolating dependencies, the design avoids package clashes and supports distributed inference on GPUs, clusters, and other devices.
+```text
+robbyant/lingbot-va-base
+robbyant/lingbot-va-posttrain-robotwin
+robbyant/lingbot-va-posttrain-libero-long
+robbyant/robotwin-clean-and-aug-lerobot
+robbyant/libero-long-lerobot
+```
 
-<!-- ### Standalone  Inference
+Set local data paths through environment variables:
+
+```bash
+export LEDGER_WAM_DATASET_PATH=/path/to/your/dataset
+export ROBOWIN_ROOT=/path/to/RoboTwin
+```
+
+`ROBOWIN_ROOT` may also be passed directly to the RoboTwin client:
+
+```bash
+python -m evaluation.robotwin.eval_polict_client_openpi \
+  --robowin_root /path/to/RoboTwin \
+  --config policy/ACT/deploy_policy.yml \
+  --overrides ...
+```
+
+## Important Configurations
+
+Enable Ledger-WAM:
+
 ```python
-python inference.py
+ledger_enabled = True
 ```
-This processes the example data from `examples/0/` and saves visualizations to `result/`. -->
 
-### Evaluation on RoboTwin-2.0
+Common Ledger fields:
 
-**Preparing the Environment**
+```text
+ledger_annotation_path
+ledger_strict
+ledger_max_claims
+ledger_max_counterfactuals
+ledger_action_dim
+ledger_debt_threshold
+ledger_global_risk_threshold
+ledger_confidence_threshold
+ledger_repair_cost_weight
+ledger_repair_risk_weight
+ledger_repair_catalog
+ledger_allow_random_head
+ledger_allow_prompt_repair_fallback
+```
 
-You can follow the official instructions from the original RoboTwin-2.0 repository:  
-[https://robotwin-platform.github.io/doc/usage/robotwin-install.html](https://robotwin-platform.github.io/doc/usage/robotwin-install.html)
+Action pose conversion is configured per environment:
 
+```python
+relative_action_pose_slices = ((0, 7), (8, 15))  # RoboTwin
+relative_action_pose_slices = ((0, 7), (7, 14))  # Franka
+```
 
-In summary:
+Each slice must be `[x, y, z, qx, qy, qz, qw]`. LIBERO and demo configurations
+do not enable relative pose conversion by default.
 
-1. Install Vulkan dependencies:
-   ```bash
-   sudo apt install libvulkan1 mesa-vulkan-drivers vulkan-tools
-   ```
+## Ledger Annotation Sidecar
 
-2. Clone the RoboTwin repository:
-   ```bash
-   git clone https://github.com/RoboTwin-Platform/RoboTwin.git && cd RoboTwin && git checkout 2eeec322
-   ```
+Ledger post-training uses a JSON/JSONL sidecar. Default location:
 
-3. Modify `script/requirements.txt` with the following content:
-   ```txt
-   transforms3d==0.4.2
-   sapien==3.0.0b1
-   scipy==1.10.1
-   mplib==0.2.1
-   gymnasium==0.29.1
-   trimesh==4.4.3
-   open3d==0.18.0
-   imageio==2.34.2
-   pydantic
-   zarr
-   openai
-   huggingface_hub==0.36.2
-   h5py
-   # For Description Generation
-   azure==4.0.0
-   azure-ai-inference
-   pyglet<2
-   wandb
-   moviepy
-   imageio
-   termcolor
-   av
-   matplotlib
-   ffmpeg
-   ```
+```text
+<LeRobot dataset root>/meta/ledger_annotations.jsonl
+```
 
-4. Modify line 8 of `script/_install.sh`:
-   ```bash
-   pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable" --no-build-isolation
-   ```
+You can override it with `ledger_annotation_path`.
 
-5. Install dependencies:
-   ```bash
-   bash script/_install.sh
-   ```
+Example:
 
-6. Download assets:
-   ```bash
-   bash script/_download_assets.sh
-   ```
+```json
+{
+  "key": "12:30:90",
+  "episode_index": 12,
+  "start_frame": 30,
+  "end_frame": 90,
+  "claims": [
+    {
+      "claim": 1.0,
+      "claim_type": 1,
+      "subject": 3,
+      "object": 7,
+      "relation": 9,
+      "precondition": 4,
+      "effect": 2,
+      "evidence": 0.8,
+      "uncertainty": 0.2,
+      "dependency": 0.9,
+      "observability": 0.4,
+      "repair_cost": 0.35,
+      "importance": 1.0,
+      "debt": 0.75,
+      "rollback": 4,
+      "repair_action": 1,
+      "post_repair_debt": 0.15
+    }
+  ],
+  "dependency_edges": [
+    {"source": 0, "target": 1, "weight": 1.0}
+  ],
+  "counterfactual_actions": [
+    {"action": [0.0, 0.1], "delta": [1.0]}
+  ]
+}
+```
 
- **Deploying the Inference Server**
+Notes:
+
+- `key` is `episode_index:start_frame:end_frame`.
+- Missing labels are masked independently and are never treated as negative
+  labels.
+- `dependency_edges` represents directed causal dependencies. Dense
+  `dependency_matrix` is also supported.
+- `repair_action` indexes `ledger_repair_catalog`; each catalog `id` must equal
+  its list position.
+- `rollback` indexes the fixed `ledger_rollback_stage_ontology`.
+
+See [LEDGER_WAM.md](LEDGER_WAM.md) for the full schema.
+
+## Training
+
+Standard LingBot-VA post-training:
+
 ```bash
-# single GPU
+CONFIG_NAME=robotwin_train bash script/run_va_posttrain.sh
+```
+
+Ledger-WAM post-training:
+
+```bash
+CONFIG_NAME=ledger_robotwin_train \
+  bash script/run_va_posttrain.sh \
+  --ledger-annotation-path /path/to/ledger_annotations.jsonl \
+  --ledger-strict
+```
+
+Other Ledger training configs:
+
+```text
+ledger_libero_train
+ledger_demo_train
+```
+
+The trainer optimizes LingBot-VA video/action objectives together with Ledger
+objectives: claim structure, evidence, uncertainty, dependency, debt, rollback,
+repair action, repair cost, post-repair debt, counterfactual transitions, and
+recurrent slot consistency.
+
+Repair reward supervision follows:
+
+```text
+debt_reduction - beta * action_cost - gamma * task_risk
+```
+
+## Inference and Evaluation
+
+RoboTwin server:
+
+```bash
 bash evaluation/robotwin/launch_server.sh
-
-# multi-GPU
-bash evaluation/robotwin/launch_server_multigpus.sh
 ```
 
- **Executing the Inference Client**
+RoboTwin client:
+
 ```bash
-# single GPU
-task_name="adjust_bottle";
-save_root="results/";
+export ROBOWIN_ROOT=/path/to/RoboTwin
+
+task_name="adjust_bottle"
+save_root="results"
 bash evaluation/robotwin/launch_client.sh ${save_root} ${task_name}
-
-# multi-GPU
-save_root="results/"
-task_group_id=0;
-bash evaluation/robotwin/launch_client_multigpus.sh ${save_root} ${task_group_id}
 ```
 
-Related experiments results will be save in `/path/to/your/RoboTwin/${save_root}`. Please note that an `eval_result` folder is also generated. This is a native output from RoboTwin and is identical to the contents in the results folder; it can be safely ignored.
-It is important to note that the inference server and client must be deployed on the same machine. For launching multi-GPU client, we padded the original 50 tasks to 56 via duplication and partitioned them into 7 groups to align with the 8-GPU configuration of our inference node. You can specify the `task_group_id` (0-6) to select a particular group for inference. For detailed grouping configurations, please refer to `evaluation/robotwin/launch_client_multigpus.sh`.
-
-> **GPU Memory Requirements**: Approximately **24GB VRAM** for single-GPU RoboTwin evaluation with offload mode enabled (VAE and text_encoder offloaded to CPU).
-
-
-### Evaluation on LIBERO
-Follow the official instructions to install LIBERO, then launch the server and client:
-
+LIBERO:
 
 ```bash
-# server
 bash evaluation/libero/launch_server.sh
-
-# client
 bash evaluation/libero/launch_client.sh
 ```
 
-### Run Image to Video-Action Generation
-
-We also provide a script for image to video-action generation:
+Image-to-video-action generation:
 
 ```bash
 NGPU=1 CONFIG_NAME='robotwin_i2av' bash script/run_launch_va_server_sync.sh
 ```
 
-> **GPU Memory Requirements**: Approximately **18GB VRAM** for single-GPU i2av inference with offload mode enabled (VAE and text_encoder offloaded to CPU).
+## Online Repair Protocol
 
+Reset:
 
-## Post-Training LingBot-VA
-
-We support post-training (fine-tuning) LingBot-VA on custom robotic manipulation datasets. The training pipeline uses FSDP for distributed training and integrates with [LeRobot](https://github.com/huggingface/lerobot) dataset format.
-
-### Additional Dependencies
-
-On top of the base installation, post-training requires:
-
-```bash
-pip install lerobot==0.3.3 scipy wandb --no-deps
+```python
+client.infer({
+    "reset": True,
+    "prompt": "put the cup in the box",
+    "planning_checkpoints": [
+        {"checkpoint_id": "task_start", "cursor": 0},
+        {"checkpoint_id": "grasp", "cursor": 3, "subgoal": "grasp"}
+    ]
+})
 ```
 
-### Data Preparation
+Observation with external causal evidence:
 
-Download the post-training dataset from HuggingFace:
-
-```bash
-huggingface-cli download --repo-type dataset robbyant/robotwin-clean-and-aug-lerobot --local-dir /path/to/your/dataset
+```python
+client.infer({
+    "obs": observation,
+    "ledger_claims": [serialized_claim],
+    "ledger_dependencies": [["grasp", "transport"]],
+    "ledger_evidence": [
+        {
+            "claim_id": "grasp",
+            "source": "tactile_sensor",
+            "polarity": "contradicts",
+            "strength": 0.9,
+            "timestamp": 12
+        }
+    ]
+})
 ```
 
-### Custom Dataset Preparation
+Repair action chunks must be supplied by production controllers:
 
-If you want to fine-tune LingBot-VA on your own robotic manipulation data, follow these steps:
+```python
+request["repair_action_chunks"] = {
+    "lift_test": lift_test_action_chunk,
+    "local_rollback": local_recovery_action_chunk
+}
+```
 
-#### Example Dataset
+Chunk shape:
 
-We provide a converted example dataset based on data from [Issue #29](https://github.com/Robbyant/lingbot-va/issues/29). This dataset has been converted into the expected format and is fully supported for training. You can download it to understand the required data structure:
+```text
+[used_action_channels, frame_chunk_size, actions_per_frame]
+```
 
-- **Download**: [Example Dataset](https://drive.google.com/file/d/1D52nK4ZOJmWBXKv1nWrLb9YBwq8nKa_b/view?usp=sharing)
+If no executable repair chunk is available, the server fails closed:
 
-This example can serve as a reference for converting your own robotic manipulation data into the proper format.
-
-#### Data Pipeline Overview
-
-When preparing your custom dataset, the data goes through the following processing pipeline:
-
-1. **Raw Data** → Convert to LeRobot format (with metadata and video files)
-2. **Add Action Segmentation** → Add `action_config` to `episodes.jsonl`
-3. **Extract Latents** → Process videos through VAE according to video specifications
-4. **Dataset Loading** → Load processed data with proper action dimensions for training
-
-The final data should conform to these specifications:
-
-**Action Format:**
-- Output dimension: **30 dimensions**, structured as follows:
-  - Left arm EEF (end-effector): 7 dimensions
-  - Right arm EEF (end-effector): 7 dimensions
-  - Left arm joints: 7 dimensions
-  - Right arm joints: 7 dimensions
-  - Left arm gripper: 1 dimension
-  - Right arm gripper: 1 dimension
-- In your dataset class loader, map your robot's action dimensions to this standard 30-dimensional format. Missing dimensions are padded with **0**.
-
-**Video Format:**
-- During VAE latent extraction, resize videos to **~256 × 256 pixels** and downsample to **5-15 fps** as a reference (adjust based on your task requirements).
-
-#### Implementation Steps
-
-**Step 1: Convert your data to LeRobot format**
-
-Follow the official [LeRobot dataset documentation](https://github.com/huggingface/lerobot/tree/v0.3.3) to convert your raw data (e.g., HDF5, video files, etc.) into the standard LeRobot dataset format. Ensure that each episode contains the required observation videos, actions, and metadata.
-
-**Step 2: Add `action_config` field to `episodes.jsonl`**
-
-After converting to LeRobot format, you need to modify the `meta/episodes.jsonl` file to add an `action_config` field to each line. This field describes the temporal segmentation and natural language description of the robot's actions within each episode.
-
-Each line in `episodes.jsonl` should follow this format:
-
-```json
+```python
 {
-  "episode_index": 0,
-  "tasks": ["task description"],
-  "length": 450,
-  "action_config": [
-    {
-      "start_frame": 0,
-      "end_frame": 450,
-      "action_text": "Natural language description of the robot action in this segment.",
-    }
-  ]
+    "action": None,
+    "requires_repair_action": True,
+    "repair_action_id": "lift_test",
+    "repair_instruction": "..."
 }
 ```
 
-- `start_frame` / `end_frame`: The frame range (0-indexed) of the action segment within the episode.
-- `action_text`: A natural language description of what the robot does in this segment.
+After executing a repair chunk, the controller must acknowledge execution:
 
-For episodes with a single continuous action, `start_frame` should be `0` and `end_frame` should equal the episode `length`. You can also define multiple segments per episode if your data contains sequential sub-tasks.
-
-**Step 3: Extract video latents with Wan2.2 VAE**
-
-LingBot-VA operates on video latent representations rather than raw pixels. You need to extract the latent features using the Wan2.2 VAE encoder and place them under the converted LeRobot dataset directory. Please refer to the [Wan-Video documentation](https://github.com/Wan-Video) for instructions on how to run the VAE encoder.
-
-The extracted latent files should be placed under `latents/` in your dataset directory, mirroring the structure of `videos/`:
-
-```
-your_dataset/
-├── videos/
-│   └── chunk-000/
-│       └── observation.images.cam_high/
-│           ├── episode_000000.mp4
-│           └── ...
-├── latents/
-│   └── chunk-000/
-│       └── observation.images.cam_high/
-│           ├── episode_000000_0_450.pth    # named as episode_{index}_{start_frame}_{end_frame}.pth
-│           └── ...
-└── meta/
-    └── episodes.jsonl
+```python
+client.infer({
+    "compute_kv_cache": True,
+    "obs": key_frame_list,
+    "state": executed_action,
+    "repair_execution_ack": {
+        "action_id": response["repair_action_id"],
+        "execution_id": response["repair_execution"]["execution_id"],
+        "success": True
+    }
+})
 ```
 
-Each `.pth` file is a dictionary containing the following fields:
+The server will not issue a second repair action while one is awaiting
+acknowledgement.
 
-| Key | Type | Description |
-| :--- | :--- | :--- |
-| `latent` | `Tensor [N, C]` (bfloat16) | Flattened VAE latent features (e.g., shape `[latent_num_frames * latent_height * latent_width, C]`) |
-| `latent_num_frames` | `int` | Number of temporal frames in the latent space |
-| `latent_height` | `int` | Spatial height in the latent space |
-| `latent_width` | `int` | Spatial width in the latent space |
-| `video_num_frames` | `int` | Number of frames in the (sampled) source video |
-| `video_height` | `int` | Original video height in pixels |
-| `video_width` | `int` | Original video width in pixels |
-| `text_emb` | `Tensor [L, D]` (bfloat16) | Text embedding of the action description (encoded by Wan2.2 text encoder) |
-| `text` | `str` | The raw action description text |
-| `frame_ids` | `list[int]` | Sampled frame indices from the original episode (at target fps) |
-| `start_frame` | `int` | Start frame index matching `action_config` in `episodes.jsonl` |
-| `end_frame` | `int` | End frame index matching `action_config` in `episodes.jsonl` |
-| `fps` | `int` | Target sampling fps used for latent extraction |
-| `ori_fps` | `int` | Original fps of the episode data |
+## Metrics
 
-The latent file naming convention `episode_{index}_{start_frame}_{end_frame}.pth` corresponds to the `action_config` segments defined in `episodes.jsonl`. For example, an episode with `"start_frame": 0, "end_frame": 450` produces a latent file named `episode_000000_0_450.pth`.
+`wan_va/ledger/metrics.py` provides:
 
-### Training
+```text
+claim_root_cause_metrics
+top_k_accuracy
+debt_calibration_metrics
+rollback_metrics
+repair_metrics
+local_rollback_metrics
+compute_ledger_metrics
+```
+
+## Verification
+
+Lightweight checks:
 
 ```bash
-# RoboTwin
-NGPU=8 CONFIG_NAME='robotwin_train' bash script/run_va_posttrain.sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m compileall -q \
+  wan_va tests evaluation script
 
-# LIBERO
-NGPU=8 CONFIG_NAME='libero_train' bash script/run_va_posttrain.sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ```
 
-For better training performance, use a larger global batch size (e.g., 32, 64). If you have limited GPU resources, you can increase `gradient_accumulation_steps` to achieve a larger effective batch size.
+Latest local verification:
 
-
----
-
-# 📊 Performance
-
-We evaluate our model on both simulation benchmarks and real-world scenarios, and achieve state-of-the-art performance.
-
-## Simulation Evaluation
-
-- **RoboTwin 2.0**
-
-We are the first to propel RoboTwin 2.0 metrics performance past the 90+ threshold！
-<table style="border-collapse: collapse; width: auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px; line-height: 1.2;">
-<!-- 指标说明 -->
-  <p style="font-size: 12px; color: #666; margin-bottom: 5px;">* All metrics are reported in percentage (%). Higher values are <b>bolded</b>.</p>
-  <thead>
-    <tr style="border-top: 2px solid black; border-bottom: 1px solid black;">
-      <th align="left" style="padding: 6px 12px; white-space: nowrap;">Method (Average 50 Tasks)</th>
-      <th align="center" style="padding: 6px 12px;">Easy SR (%)</th>
-      <th align="center" style="padding: 6px 12px;">Hard SR (%)</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding: 4px 12px; white-space: nowrap;">X-VLA</td>
-      <td align="center">72.9</td>
-      <td align="center">72.8</td>
-    </tr>
-    <tr>
-      <td style="padding: 4px 12px; white-space: nowrap;">&pi;<sub>0</sub></td>
-      <td align="center">65.9</td>
-      <td align="center">58.4</td>
-    </tr>
-    <tr>
-      <td style="padding: 4px 12px; white-space: nowrap;">&pi;<sub>0.5</sub></td>
-      <td align="center">82.7</td>
-      <td align="center">76.8</td>
-    </tr>
-    <tr>
-      <td style="padding: 4px 12px; white-space: nowrap;">Motus</td>
-      <td align="center"><u>88.7</u></td>
-      <td align="center"><u>87.0</u></td>
-    </tr>
-    <tr style="border-top: 1px solid black; border-bottom: 2px solid black;">
-      <td style="padding: 6px 12px; white-space: nowrap;"><b>LingBot-VA (Ours)</b></td>
-      <td align="center"><b>92.9</b> <small>(+4.2)</small></td>
-      <td align="center"><b>91.6</b> <small>(+4.6)</small></td>
-    </tr>
-  </tbody>
-</table>
-
-
-- **LIBERO**
-
-<table style="border-collapse: collapse; width: auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; font-size: 13px; line-height: 1.2;">
-<!-- 指标说明 -->
-  <p style="font-size: 12px; color: #666; margin-bottom: 5px;">* All metrics are reported in percentage (%). Higher values are <b>bolded</b>.</p>
-  <thead>
-    <tr style="border-top: 2px solid black; border-bottom: 1px solid black;">
-      <th align="left" style="padding: 6px 10px; border-right: 1px solid black; white-space: nowrap;">Methods</th>
-      <th align="center" style="padding: 6px 8px;">Spatial</th>
-      <th align="center" style="padding: 6px 8px;">Object</th>
-      <th align="center" style="padding: 6px 8px;">Goal</th>
-      <th align="center" style="padding: 6px 8px;">Long</th>
-      <th align="center" style="padding: 6px 8px;">Avg</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding: 4px 10px; border-right: 1px solid black; white-space: nowrap;">&pi;<sub>0</sub></td>
-      <td align="center">96.8</td><td align="center">98.8</td><td align="center">95.8</td><td align="center">85.2</td><td align="center">94.1</td>
-    </tr>
-    <tr>
-      <td style="padding: 4px 10px; border-right: 1px solid black; white-space: nowrap;">&pi;<sub>0.5</sub></td>
-      <td align="center">98.8</td><td align="center">98.2</td><td align="center">98.0</td><td align="center">92.4</td><td align="center">96.9</td>
-    </tr>
-    <tr>
-      <td style="padding: 4px 10px; border-right: 1px solid black; white-space: nowrap;">OpenVLA</td>
-      <td align="center">84.7</td><td align="center">88.4</td><td align="center">79.2</td><td align="center">53.7</td><td align="center">76.5</td>
-    </tr>
-    <tr>
-      <td style="padding: 4px 10px; border-right: 1px solid black; white-space: nowrap;">X-VLA</td>
-      <td align="center">98.2</td><td align="center">98.6</td><td align="center">97.8</td><td align="center">97.6</td><td align="center">98.1</td>
-    </tr>
-    <tr style="border-top: 1.5px solid black; border-bottom: 2px solid black;">
-      <td style="padding: 5px 10px; border-right: 1px solid black; white-space: nowrap;"><b>LingBot-VA (Ours)</b></td>
-      <td align="center"><b>98.5 &plusmn; 0.3</b></td>
-      <td align="center"><b>99.6 &plusmn; 0.3</b></td>
-      <td align="center"><b>97.2 &plusmn; 0.2</b></td>
-      <td align="center"><b>98.5 &plusmn; 0.5</b></td>
-      <td align="center"><b>98.5</b></td>
-    </tr>
-  </tbody>
-</table>
-
-
-
-&nbsp;
-
-## Real-world Deployment
-
-Six manipulation tasks across three categories: longhorizon tasks (Make Breakfast, Pick Screws), precision tasks (Insert Tube, Unpack Delivery), and deformable & articulated object
-manipulation (Fold Clothes, Fold Pants). Our method achieves state-of-the-art performance on both metrics (Progress Rate and Success Rate) with <b>only 50 trials</b> per task, substantially outperforming strong baseline &pi;<sub>0.5</sub>.
-
-<div style="text-align: left; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6;">
-
-  <!-- 第一部分：PS 说明 -->
-  <div style="margin-bottom: 5px;"><strong>Progress Score (PS):</strong> The average score across all trials divided by the maximum possible score, expressed as a percentage:</div>
-
-  PS = Average_Progress / Max_Steps &times; 100%
-
-  <!-- 第二部分：SR 说明 -->
-  <div style="margin-bottom: 5px;"><strong>Success Rate (SR):</strong> The number of successful trials divided by the total number of trials, expressed as a percentage:</div>
-
-  SR = Successful_Trials / N &times; 100%
-
-</div>
-
-
-
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;">
-  <!-- 指标说明 -->
-  <p style="font-size: 12px; color: #666; margin-bottom: 5px;">* All metrics are reported in percentage (%). Higher values are <b>bolded</b>.</p>
-  
-  <table style="border-collapse: collapse; width: auto; font-size: 13px; line-height: 1.2;">
-    <thead>
-      <tr style="border-top: 2px solid black;">
-        <th rowspan="2" align="left" style="padding: 4px 10px; border-bottom: 1px solid black; white-space: nowrap;"><b>Task</b></th>
-        <th colspan="2" style="padding: 4px 10px; border-bottom: 1px solid black;">Make Breakfast</th>
-        <th colspan="2" style="padding: 4px 10px; border-bottom: 1px solid black;">Pick Screws</th>
-        <th colspan="2" style="padding: 4px 10px; border-bottom: 1px solid black;">Insert Tube</th>
-        <th colspan="2" style="padding: 4px 10px; border-bottom: 1px solid black;">Unpack Delivery</th>
-        <th colspan="2" style="padding: 4px 10px; border-bottom: 1px solid black;">Fold Clothes</th>
-        <th colspan="2" style="padding: 4px 10px; border-bottom: 1px solid black;">Fold Pants</th>
-      </tr>
-      <tr style="border-bottom: 1px solid black;">
-        <th style="padding: 4px 8px;">PS</th>
-        <th style="padding: 4px 8px;">SR</th>
-        <th style="padding: 4px 8px;">PS</th>
-        <th style="padding: 4px 8px;">SR</th>
-        <th style="padding: 4px 8px;">PS</th>
-        <th style="padding: 4px 8px;">SR</th>
-        <th style="padding: 4px 8px;">PS</th>
-        <th style="padding: 4px 8px;">SR</th>
-        <th style="padding: 4px 8px;">PS</th>
-        <th style="padding: 4px 8px;">SR</th>
-        <th style="padding: 4px 8px;">PS</th>
-        <th style="padding: 4px 8px;">SR</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td style="padding: 6px 10px; white-space: nowrap;">&pi;<sub>0.5</sub></td>
-        <td align="center">73.0</td><td align="center">70.0</td>
-        <td align="center">74.0</td><td align="center">50.0</td>
-        <td align="center">79.2</td><td align="center">30.0</td>
-        <td align="center">73.0</td><td align="center">25.0</td>
-        <td align="center"><b>62.9</b></td><td align="center">30.0</td>
-        <td align="center">30.0</td><td align="center">30.0</td>
-      </tr>
-      <tr style="border-bottom: 2px solid black;">
-        <td style="padding: 6px 10px; white-space: nowrap;"><b>LingBot-VA (Ours)</b></td>
-        <td align="center"><b>97.0</b></td><td align="center"><b>75.0</b></td>
-        <td align="center"><b>82.5</b></td><td align="center"><b>70.0</b></td>
-        <td align="center"><b>85.8</b></td><td align="center"><b>40.0</b></td>
-        <td align="center"><b>84.5</b></td><td align="center"><b>65.0</b></td>
-        <td align="center">48.8</td><td align="center"><b>35.0</b></td>
-        <td align="center"><b>76.7</b></td><td align="center"><b>70.0</b></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-
-# 🪪 License
-
-This project is released under the Apache License 2.0. See [LICENSE](LICENSE.txt) file for details.
-
-# 📚Citation
-
-```bibtex
-@article{lingbot-va2026,
-  title={Causal World Modeling for Robot Control},
-  author={Li, Lin and Zhang, Qihang and Luo, Yiming and Yang, Shuai and Wang, Ruilin and Han, Fei and Yu, Mingrui and Gao, Zelin and Xue, Nan and Zhu, Xing and Shen, Yujun and Xu, Yinghao},
-  journal={arXiv preprint arXiv:2601.21998},
-  year={2026}
-}
+```text
+63 tests OK
+compileall OK for key files
 ```
 
-# 🧩 Acknowledgments
+## FAQ
 
-This work builds upon several excellent open-source projects:
+### RoboTwin cannot be found
 
-- [Wan-Video](https://github.com/Wan-Video) - Vision transformer backbone
-- [MoT](https://github.com/facebookresearch/Mixture-of-Transformers) - Mixture-of-Transformers architecture
-- The broader open-source computer vision and robotics communities
+Set:
 
----
+```bash
+export ROBOWIN_ROOT=/path/to/RoboTwin
+```
 
-For questions, discussions, or collaborations:
+or pass:
 
-- **Issues**: Open an [issue](https://github.com/robbyant/lingbot-va/issues) on GitHub
-- **Email**: Contact Dr. [Qihang Zhang](https://zqh0253.github.io/) (liuhuan.zqh@antgroup.com) or Dr. [Lin Li](https://lilin-hitcrt.github.io/) (fengchang.ll@antgroup.com) 
+```bash
+--robowin_root /path/to/RoboTwin
+```
+
+### Unsupported RoboTwin action channels
+
+The current RoboTwin client supports:
+
+```text
+14 channels: dual-arm xyz+rpy+gripper
+16 channels: dual-arm xyz+quat+gripper
+```
+
+Other layouts require an environment-specific action converter.
+
+### Ledger checkpoint loading fails
+
+When `ledger_enabled=True`, the server expects a checkpoint with a trained
+Ledger head. For connectivity debugging only:
+
+```python
+ledger_allow_random_head = True
+```
+
+### `attn_mode` mismatch
+
+Use:
+
+```text
+training:  "flex"
+inference: "torch" or "flashattn"
+```
+
+This value is usually stored in `<checkpoint>/transformer/config.json`.
+
+## Acknowledgements
+
+This repository builds on LingBot-VA and keeps the original LingBot-VA model,
+data, and evaluation infrastructure where appropriate. Ledger-WAM adds the
+causal-ledger, self-healing, counterfactual, and repair-protocol layers needed
+for causal world-action modeling.
+
+## License
+
+This project follows the Apache-2.0 license in [LICENSE.txt](LICENSE.txt).
