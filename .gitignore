@@ -1,0 +1,40 @@
+*.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local environments
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Training/evaluation outputs
+wandb/
+logs/
+results/
+eval_result/
+outputs/
+checkpoints/
+runs/
+
+# Model and dataset artifacts
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+*.mp4
+*.zip
+*.tar
+*.tar.gz
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
