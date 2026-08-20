@@ -1,0 +1,17 @@
+defaults:
+  - robotwin
+  - _self_
+
+train:
+  dataset_dirs:
+    - ./data/rmbench/rmbench_lerobot
+  num_frames: 49
+  action_video_freq_ratio: 3
+  text_embedding_cache_dir: ./data/text_embeds_cache/rmbench
+
+val:
+  dataset_dirs:
+    - ./data/rmbench/rmbench_lerobot
+  num_frames: 49
+  action_video_freq_ratio: 3
+  text_embedding_cache_dir: ./data/text_embeds_cache/rmbench

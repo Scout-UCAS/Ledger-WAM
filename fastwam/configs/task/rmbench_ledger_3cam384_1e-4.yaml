@@ -1,0 +1,19 @@
+# @package _global_
+
+defaults:
+  - override /data: rmbench
+  - override /model: ledger_wam
+  - _self_
+
+batch_size: 8
+num_workers: 8
+
+model:
+  mot_checkpoint_mixed_attn: false
+  planner:
+    task_execution_horizon: 24
+
+lr_scheduler_type: cosine
+learning_rate: 1e-4
+num_epochs: 10
+weight_decay: 1e-2

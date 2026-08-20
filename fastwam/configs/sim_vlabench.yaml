@@ -1,0 +1,32 @@
+# @package _global_
+
+defaults:
+  - train
+  - override /task: vlabench_ledger_3cam224_1e-4
+  - _self_
+
+ckpt: null
+
+model:
+  load_text_encoder: true
+  skip_dit_load_from_pretrain: true
+  action_dit_pretrained_path: null
+
+EVALUATION:
+  action_horizon: 32
+  replan_steps: 5
+  num_inference_steps: ${eval_num_inference_steps}
+  repair_skills:
+    retract_z: 0.04
+    retract_xy_scale: 0.25
+    lift_z: 0.02
+    approach_z: 0.015
+    open_value: 1.0
+    close_value: -1.0
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: .
+  output_subdir: null
