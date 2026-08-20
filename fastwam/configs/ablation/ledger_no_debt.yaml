@@ -1,0 +1,7 @@
+# @package _global_
+# Removes direct causal-debt calibration while retaining claim supervision.
+model:
+  ledger_loss:
+    lambda_debt: 0.0
+  planner:
+    global_risk_threshold: 2.0

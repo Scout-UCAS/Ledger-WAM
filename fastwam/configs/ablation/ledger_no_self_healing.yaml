@@ -1,0 +1,5 @@
+# @package _global_
+# Keeps the ledger as an auxiliary representation but always executes task chunks.
+model:
+  planner:
+    global_risk_threshold: 2.0

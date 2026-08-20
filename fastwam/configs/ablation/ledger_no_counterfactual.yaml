@@ -1,0 +1,4 @@
+# @package _global_
+model:
+  ledger_loss:
+    lambda_counterfactual: 0.0

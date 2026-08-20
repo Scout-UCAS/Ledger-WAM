@@ -1,13 +1,25 @@
 # Ledger-WAM: Causal Ledger World-Action Model
 
 Ledger-WAM is a Ledger-augmented world-action model for embodied robot control.
-This repository is built on top of LingBot-VA and extends it with structured
-causal-belief tracking, causal debt estimation, counterfactual action modeling,
-self-healing repair selection, and local logical rollback.
+This repository contains two backend implementations of structured causal-belief
+tracking, causal debt estimation, counterfactual action modeling, self-healing
+repair selection, and local logical rollback.
 
-The implementation is opt-in. Legacy LingBot-VA configurations keep their
-original behavior, while Ledger-WAM paths are enabled through `ledger_enabled`
-or the `ledger_*` training/server configurations.
+## Fast-WAM implementation
+
+The paper-aligned Fast-WAM implementation is available in [`fastwam/`](fastwam/).
+It includes the complete Fast-WAM baseline, recurrent causal ledger, dynamic
+object slots, K-step dependency prediction, candidate-action world predictor,
+task-graph rollback, physical repair skills, strong/weak annotation pipelines,
+LIBERO/RoboTwin/RMBench/VLABench adapters, metrics, ablations, and tests.
+
+Start with [`fastwam/LEDGER_WAM.md`](fastwam/LEDGER_WAM.md) and the
+[paper-to-code coverage table](fastwam/docs/method_coverage.md). The existing
+`wan_va/` tree is retained as the LingBot-VA backend for compatibility.
+
+The LingBot-VA implementation is opt-in. Legacy LingBot-VA configurations keep
+their original behavior, while Ledger-WAM paths are enabled through
+`ledger_enabled` or the `ledger_*` training/server configurations.
 
 ## Highlights
 

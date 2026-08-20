@@ -1,0 +1,6 @@
+# @package _global_
+model:
+  ledger_loss:
+    lambda_rollback: 0.0
+  planner:
+    conflict_confidence_threshold: -1.0
